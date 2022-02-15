@@ -1,12 +1,12 @@
-# Flask utils
-from flask import Flask, redirect, url_for, request, render_template, Response
-from werkzeug.utils import secure_filename
-from gevent.pywsgi import WSGIServer
-from camera import ObjectDetection
-from datetime import datetime  # importing datetime for naming files w/ timestamp
 import socket
-from goprocam import GoProCamera
-from goprocam import constants
+
+from flask import Flask, render_template
+from flask.wrappers import Response
+from object_detection.capture import VideoStreamCapture
+
+from object_detection.webcam_detection import WebcamObjectDetection
+from object_detection.video_capture_detection import VideoCaptureObjectDetection
+from object_detection.yolo_config import YoloV3Config
 
 app = Flask(__name__)
 
@@ -17,39 +17,28 @@ def main():
 
 
 def gen(camera):
+
+    display_frame = ""
+
     while True:
         frame = camera.main()
         if frame != "":
+            display_frame = frame
             yield (
-                b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n\r\n"
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n\r\n" + display_frame + b"\r\n\r\n"
             )
 
 
 @app.route("/video_feed")
 def video_feed():
-    id = 0
     return Response(
-        gen(ObjectDetection(id)), mimetype="multipart/x-mixed-replace; boundary=frame"
-    )
-
-
-def simulate(camera):
-    while True:
-        frame = camera.main()
-        if frame != "":
-            yield (
-                b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n\r\n"
+        gen(
+            VideoCaptureObjectDetection(
+                0, VideoStreamCapture("dog-cycle-car.png"), YoloV3Config()
             )
-
-
-@app.route("/video_simulate")
-def video_simulate():
-    gpCam = GoProCamera.GoPro()
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    gpCam.livestream("start")
-    id = "udp://10.5.5.9:8554"
-    return Response(
-        gen(ObjectDetection(id)), mimetype="multipart/x-mixed-replace; boundary=frame"
+        ),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
     )
 
 
